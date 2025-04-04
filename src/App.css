@@ -39,13 +39,9 @@
 
 :root {
   --bg-primary: #ffffff;
-
-
-
-
   --border-color:rgb(240, 240, 240);
   --primary-color: #0066cc;
   --primary-color-rgb: 0, 102, 204;
 
 }
-/* Styles généraux pour les boutons */
+
