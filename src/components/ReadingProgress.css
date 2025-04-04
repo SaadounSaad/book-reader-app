@@ -1,0 +1,89 @@
+/* ReadingProgress.css */
+.reading-progress-container {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.current-page, .progress-percentage {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.progress-bar-container {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  cursor: pointer;
+}
+
+.progress-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.chapter-marker {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 20px;
+  background-color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.reading-time {
+  margin-top: 0.5rem;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Hover effects */
+.progress-bar-container:hover .progress-bar {
+  height: 8px;
+}
+
+.progress-bar-container:hover .chapter-marker {
+  opacity: 0.8;
+}
+
+/* États actifs */
+.progress-bar-container:active .progress-bar {
+  background-color: var(--highlight-bg);
+}
+
+.progress-bar-container:active .progress-fill {
+  transition: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .reading-progress-container {
+    padding: 0.5rem;
+  }
+  
+  .progress-info, .reading-time {
+    font-size: 0.8rem;
+  }
+}
