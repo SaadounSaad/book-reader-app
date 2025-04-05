@@ -9,6 +9,7 @@ import SearchPanel from './SearchPanel';
 import ReadingProgress from './ReadingProgress';
 import AnnotationsList from './AnnotationsList';
 import './Reader.css';
+import { v4 as uuidv4 } from 'uuid';
 
 const Reader = ({ 
   books, 
@@ -44,7 +45,7 @@ const Reader = ({
   // Trouver le livre correspondant à l'ID
   useEffect(() => {
     if (books && bookId) {
-      const foundBook = books.find(b => b.id === parseInt(bookId));
+      const foundBook = books.find(b => b.id.toString() === bookId.toString());
       if (foundBook) {
         setBook(foundBook);
         setCurrentPage(foundBook.currentPage || 1);
@@ -53,25 +54,32 @@ const Reader = ({
         const chapter = foundBook.chapters.findIndex(
           (ch, index, arr) => {
             const nextChapter = arr[index + 1];
-            return ch.startPage <= foundBook.currentPage && 
-                  (!nextChapter || nextChapter.startPage > foundBook.currentPage);
+            const pageToUse = foundBook.currentPage || 1;
+            const startPage = ch.startPage || ch.pageNumber; // Support des deux formats
+            
+            return startPage <= pageToUse && 
+                  (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageToUse);
           }
         );
         
         setCurrentChapter(chapter !== -1 ? chapter : 0);
         setLastRecordedPage(foundBook.currentPage || 1);
         
-        // Chargement simulé du contenu du livre pour la recherche
-        // Dans une application réelle, nous chargerions le contenu réel du livre
-        const simulatedContent = {};
-        for (let i = 1; i <= foundBook.totalPages; i++) {
-          simulatedContent[i] = `Contenu de la page ${i}. Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-            Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. 
-            Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. 
-            Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. 
-            Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue.`;
-        }
-        setBookContent(simulatedContent);
+        // Extraire le contenu réel du livre depuis les chapitres
+        const content = {};
+        foundBook.chapters.forEach((chapter, index) => {
+          const startPage = chapter.startPage || chapter.pageNumber;
+          const endPage = index < foundBook.chapters.length - 1 
+            ? (foundBook.chapters[index + 1].startPage || foundBook.chapters[index + 1].pageNumber) - 1 
+            : foundBook.totalPages;
+            
+          // Remplir les pages de ce chapitre avec son contenu
+          for (let i = startPage; i <= endPage; i++) {
+            content[i] = chapter.content || `Contenu de la page ${i}. ورد يوم الجمعة`;
+          }
+        });
+        
+        setBookContent(content);
       }
     }
     
@@ -140,7 +148,7 @@ const Reader = ({
       
       // Vérifier si on change de chapitre
       const nextChapter = book.chapters.findIndex(
-        ch => ch.startPage > currentPage && ch.startPage <= currentPage + 1
+        ch => (ch.startPage || ch.pageNumber) > currentPage && (ch.startPage || ch.pageNumber) <= currentPage + 1
       );
       
       if (nextChapter !== -1) {
@@ -157,7 +165,7 @@ const Reader = ({
       const prevChapter = book.chapters
         .slice()
         .reverse()
-        .findIndex(ch => ch.startPage <= currentPage - 1);
+        .findIndex(ch => (ch.startPage || ch.pageNumber) <= currentPage - 1);
       
       if (prevChapter !== -1) {
         setCurrentChapter(book.chapters.length - 1 - prevChapter);
@@ -167,7 +175,7 @@ const Reader = ({
   
   const goToChapter = (chapterIndex) => {
     if (book && book.chapters[chapterIndex]) {
-      setCurrentPage(book.chapters[chapterIndex].startPage);
+      setCurrentPage(book.chapters[chapterIndex].startPage || book.chapters[chapterIndex].pageNumber);
       setCurrentChapter(chapterIndex);
       setMenuOpen(false);
     }
@@ -181,8 +189,10 @@ const Reader = ({
       const chapter = book.chapters.findIndex(
         (ch, index, arr) => {
           const nextChapter = arr[index + 1];
-          return ch.startPage <= pageNumber && 
-                (!nextChapter || nextChapter.startPage > pageNumber);
+          const startPage = ch.startPage || ch.pageNumber;
+          
+          return startPage <= pageNumber && 
+                (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageNumber);
         }
       );
       
@@ -277,7 +287,39 @@ const Reader = ({
       setSearchOpen(true);
     }
   };
-  
+  // Dans Reader.js
+  useEffect(() => {
+    if (book && book.source === 'epub') {
+      // Créer un style scope pour l'EPUB qui n'affecte pas le reste de l'application
+      const styleElement = document.createElement('style');
+      styleElement.id = 'epub-styles';
+      styleElement.innerHTML = `
+        .page-content {
+          overflow-y: auto;
+          height: calc(100vh - 140px); /* Ajustez selon votre mise en page */
+        }
+        
+        .page-content * {
+          max-width: 100%;
+        }
+        
+        .page-content img {
+          display: block;
+          margin: 0 auto;
+          max-width: 100%;
+          height: auto;
+        }
+      `;
+      document.head.appendChild(styleElement);
+      
+      return () => {
+        const existingStyle = document.getElementById('epub-styles');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+      };
+    }
+  }, [book]);
   // Ajouter l'écouteur d'événements de clavier
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -290,9 +332,64 @@ const Reader = ({
     return <div className="reader-loading">Chargement...</div>;
   }
   
+  // Obtenir le contenu de la page actuelle
+  const getCurrentChapterContent = () => {
+    if (!book || !book.chapters || book.chapters.length === 0) {
+      return null;
+    }
+
+    // Trouver le chapitre correspondant à la page actuelle
+    const currentChapterContent = book.chapters.find((chapter, index) => {
+      const nextChapter = book.chapters[index + 1];
+      const startPage = chapter.startPage || chapter.pageNumber;
+      
+      return currentPage >= startPage && 
+            (!nextChapter || currentPage < (nextChapter.startPage || nextChapter.pageNumber));
+    });
+
+    return currentChapterContent;
+  };
+  
+  const currentChapterContent = getCurrentChapterContent();
   const currentBookmark = book.bookmarks && book.bookmarks.includes(currentPage);
   const progress = (currentPage / book.totalPages) * 100;
-  
+  const renderBookContent = () => {
+    if (!book) return <p>Chargement...</p>;
+    
+    // Si c'est un livre EPUB
+    if (book.source === 'epub') {
+      const currentChapterContent = getCurrentChapterContent();
+      
+      if (currentChapterContent && currentChapterContent.content) {
+        // Pour les EPUB, on affiche toujours avec dangerouslySetInnerHTML car c'est du HTML
+        return (
+          <div className="epub-content">
+            <div dangerouslySetInnerHTML={{ __html: currentChapterContent.content }} />
+          </div>
+        );
+      }
+    } 
+    // Livres standards créés manuellement
+    else {
+      const currentChapterContent = getCurrentChapterContent();
+      
+      if (currentChapterContent && currentChapterContent.content) {
+        if (currentChapterContent.content.includes('<') && currentChapterContent.content.includes('>')) {
+          return <div dangerouslySetInnerHTML={{ __html: currentChapterContent.content }} />;
+        } else {
+          return (
+            <div>
+              {currentChapterContent.content.split('\n').map((paragraph, i) => (
+                <p key={i}>{paragraph}</p>
+              ))}
+            </div>
+          );
+        }
+      }
+    }
+    
+    return <p>Aucun contenu disponible pour cette page.</p>;
+  };
   return (
     <div 
       className={`reader-container theme-${theme}`} 
@@ -366,12 +463,7 @@ const Reader = ({
         onTouchEnd={handleTextSelection}
       >
         <div className="page-content">
-          <p>Contenu de la page {currentPage} du livre...</p>
-          {/* Simulation du contenu du livre */}
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor.</p>
-          <p>Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat.</p>
-          <p>Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue. Ut in risus volutpat libero pharetra tempor.</p>
-          {/* Fin de la simulation */}
+          {renderBookContent()}
         </div>
       </div>
       

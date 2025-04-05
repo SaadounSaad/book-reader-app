@@ -1,3 +1,64 @@
+
+/* Styles pour l'indicateur de chargement */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  background-color: var(--bg-secondary, #ffffff);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-weight: bold;
+}
+
+/* Styles pour le conteneur de chapitre */
+.chapter-container {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.chapter-content {
+  width: 100%;
+  min-height: 150px;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  background-color: var(--bg-primary, #fff);
+  color: var(--text-primary, #333);
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Style pour l'aperçu de la couverture */
+.cover-preview {
+  margin-top: 10px;
+  max-width: 150px;
+  max-height: 200px;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.cover-preview img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+
 /* Library.css */
 .library-container {
   max-width: 1200px;

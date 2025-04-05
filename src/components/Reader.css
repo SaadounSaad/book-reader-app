@@ -284,3 +284,54 @@
     font-size: 1.2rem;
   }
 }
+/* Dans Reader.css */
+.epub-content {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.epub-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Styles de base pour les éléments HTML communs dans les EPUB */
+.epub-content h1, 
+.epub-content h2, 
+.epub-content h3, 
+.epub-content h4, 
+.epub-content h5, 
+.epub-content h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+}
+
+.epub-content p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+}
+
+.epub-content a {
+  color: var(--primary-color, #4caf50);
+  text-decoration: none;
+}
+
+.epub-content a:hover {
+  text-decoration: underline;
+}
+
+.epub-content blockquote {
+  border-left: 4px solid var(--border-color, #ddd);
+  padding-left: 1em;
+  margin-left: 0;
+  font-style: italic;
+}
+
+.epub-content code {
+  font-family: monospace;
+  background-color: var(--bg-tertiary, #f0f0f0);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}

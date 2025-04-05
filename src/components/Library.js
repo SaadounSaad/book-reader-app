@@ -1,8 +1,8 @@
-// Library.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './Library.css';
 import AddBookForm from './AddBookForm';
+import EpubImport from './EpubImport';
 
 // Composant pour afficher la couverture du livre
 const BookCover = ({ coverPath }) => {
@@ -10,13 +10,13 @@ const BookCover = ({ coverPath }) => {
   
   useEffect(() => {
     const loadCover = async () => {
-      if (coverPath.startsWith('cover_')) {
+      if (coverPath && coverPath.startsWith('cover_')) {
         // Récupérer l'image depuis localStorage
         const image = localStorage.getItem(coverPath);
         if (image) {
           setCoverSrc(image);
         }
-      } else {
+      } else if (coverPath) {
         // Chemin d'image standard (fichier local ou URL)
         setCoverSrc(coverPath);
       }
@@ -33,7 +33,13 @@ const Library = ({ books, addBook }) => {
   const [sortBy, setSortBy] = useState('title');
   const [filterBy, setFilterBy] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showEpubImport, setShowEpubImport] = useState(false);
 
+  const handleEpubImport = (newBook) => {
+    addBook(newBook);
+    setShowEpubImport(false);
+  };
   // Filtrer et trier les livres (code existant)
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -62,13 +68,27 @@ const Library = ({ books, addBook }) => {
 
   // Calculer la progression de lecture
   const calculateProgress = (currentPage, totalPages) => {
+    if (!totalPages || totalPages === 0) return 0;
     return Math.floor((currentPage / totalPages) * 100);
   };
 
-  // Fonction pour gérer l'ajout d'un livre (si nécessaire)
+  // Fonction pour gérer l'ajout d'un livre
   const handleAddBook = (newBook) => {
-    addBook(newBook);
-    setShowAddForm(false);
+    setIsLoading(true);
+    
+    try {
+      // Appeler la fonction d'ajout de livre passée en prop
+      addBook(newBook);
+      console.log("Livre ajouté avec succès:", newBook);
+      
+      // Fermer le formulaire après ajout réussi
+      setShowAddForm(false);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du livre:", error);
+      alert("Une erreur est survenue lors de l'ajout du livre. Veuillez réessayer.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -106,44 +126,60 @@ const Library = ({ books, addBook }) => {
           </div>
         </div>
       </div>
-      
-      <div className="books-grid">
-        {sortedBooks.length > 0 ? (
-          sortedBooks.map(book => (
-            <div key={book.id} className="book-card">
-              <div className="book-cover">
-                <BookCover coverPath={book.cover} />
-                <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
-                    style={{ width: `${calculateProgress(book.currentPage, book.totalPages)}%` }}
-                  ></div>
-                </div>
-              </div>
-              <div className="book-info">
-                <h3>{book.title}</h3>
-                <p className="author">par {book.author}</p>
-                <p className="progress-text">
-                  {book.currentPage} / {book.totalPages} pages ({calculateProgress(book.currentPage, book.totalPages)}%)
-                </p>
-                <div className="book-actions">
-                  <Link to={`/reader/${book.id}`} className="continue-button">
-                    {book.currentPage > 0 ? 'Continuer' : 'Commencer'}
-                  </Link>
-                  <Link to={`/stats/${book.id}`} className="stats-button">
-                    <span className="stats-icon">📊</span>
-                    <span className="stats-text">Statistiques</span>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="no-books-message">
-            <p>Aucun livre ne correspond à votre recherche</p>
-          </div>
-        )}
+      <div className="library-footer">
+        <p>Nombre de livres: {books.length}</p>
+        <div className="library-actions">
+          <button className="add-book-button" onClick={() => setShowAddForm(true)}>
+            + Ajouter un livre
+          </button>
+          <button className="import-epub-button" onClick={() => setShowEpubImport(true)}>
+            Importer EPUB
+          </button>
+        </div>
       </div>
+      {isLoading ? (
+        <div className="loading-overlay">
+          <div className="loading-spinner">Chargement...</div>
+        </div>
+      ) : (
+        <div className="books-grid">
+          {sortedBooks.length > 0 ? (
+            sortedBooks.map(book => (
+              <div key={book.id} className="book-card">
+                <div className="book-cover">
+                  <BookCover coverPath={book.cover} />
+                  <div className="progress-bar">
+                    <div 
+                      className="progress-fill" 
+                      style={{ width: `${calculateProgress(book.currentPage, book.totalPages)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div className="book-info">
+                  <h3>{book.title}</h3>
+                  <p className="author">par {book.author}</p>
+                  <p className="progress-text">
+                    {book.currentPage} / {book.totalPages} pages ({calculateProgress(book.currentPage, book.totalPages)}%)
+                  </p>
+                  <div className="book-actions">
+                    <Link to={`/reader/${book.id}`} className="continue-button">
+                      {book.currentPage > 0 ? 'Continuer' : 'Commencer'}
+                    </Link>
+                    <Link to={`/stats/${book.id}`} className="stats-button">
+                      <span className="stats-icon">📊</span>
+                      <span className="stats-text">Statistiques</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="no-books-message">
+              <p>Aucun livre ne correspond à votre recherche</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="library-footer">
         <p>Nombre de livres: {books.length}</p>
@@ -157,8 +193,15 @@ const Library = ({ books, addBook }) => {
         <AddBookForm 
           onAddBook={handleAddBook} 
           onCancel={() => setShowAddForm(false)} 
-          />
-        )}
+        />
+      )}
+      {/* Importation EPUB */}
+      {showEpubImport && (
+        <EpubImport 
+          onImportComplete={handleEpubImport}
+          onCancel={() => setShowEpubImport(false)}
+        />
+      )}
     </div>
   );
 };

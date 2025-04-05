@@ -1,14 +1,24 @@
 // AddBookForm.js
 import React, { useState } from 'react';
-import './AddBookForm.css'; // N'oubliez pas de créer ce fichier CSS
+import { v4 as uuidv4 } from 'uuid';
+import './AddBookForm.css';
 
 const AddBookForm = ({ onAddBook, onCancel }) => {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
-  const [totalPages, setTotalPages] = useState(0);
-  const [chapters, setChapters] = useState([{ title: 'Chapitre 1', startPage: 1 }]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [chapters, setChapters] = useState([
+    { title: '', pageNumber: 1, content: '' }
+  ]);
+  
+  // Gestion du changement de chapitre
+  const handleChapterChange = (index, field, value) => {
+    const updatedChapters = [...chapters];
+    updatedChapters[index][field] = value;
+    setChapters(updatedChapters);
+  };
   
   // Fonction pour gérer la sélection de fichier de couverture
   const handleCoverChange = (e) => {
@@ -51,45 +61,45 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
       coverPath = await saveImage(coverFile);
     }
     
-    // Créer un nouvel objet livre
+    // Créer un nouvel objet livre compatible avec votre structure dans App.js
     const newBook = {
-      id: Date.now(),
+      id: Number(Date.now()), // Ou uuidv4() si vous préférez utiliser des UUID
       title,
       author,
       cover: coverPath,
       totalPages: parseInt(totalPages),
-      currentPage: 0,
+      currentPage: 1,
       lastModified: new Date().toISOString(),
-      chapters,
+      chapters: chapters.map((chapter, index) => ({
+        id: index + 1,
+        title: chapter.title,
+        startPage: parseInt(chapter.pageNumber),
+        content: chapter.content
+      })),
       bookmarks: [],
       annotations: []
     };
     
+    console.log("Nouveau livre créé:", newBook);
     onAddBook(newBook);
+    onCancel(); // Fermer le formulaire
   };
   
   // Gestion des chapitres
   const addChapter = () => {
-    const lastChapter = chapters[chapters.length - 1];
-    const newChapter = {
-      title: `Chapitre ${chapters.length + 1}`,
-      startPage: lastChapter ? lastChapter.startPage + 10 : 1
-    };
-    setChapters([...chapters, newChapter]);
-  };
-  
-  const updateChapter = (index, field, value) => {
-    const updatedChapters = [...chapters];
-    updatedChapters[index] = {
-      ...updatedChapters[index],
-      [field]: field === 'startPage' ? parseInt(value) : value
-    };
-    setChapters(updatedChapters);
+    setChapters([...chapters, { 
+      title: '', 
+      pageNumber: chapters.length > 0 ? chapters[chapters.length - 1].pageNumber + 10 : 1, 
+      content: '' 
+    }]);
   };
   
   const removeChapter = (index) => {
-    const updatedChapters = chapters.filter((_, i) => i !== index);
-    setChapters(updatedChapters);
+    if (chapters.length > 1) { // Garder au moins un chapitre
+      const updatedChapters = [...chapters];
+      updatedChapters.splice(index, 1);
+      setChapters(updatedChapters);
+    }
   };
   
   return (
@@ -155,31 +165,43 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
         <div className="form-group">
           <label>Chapitres</label>
           {chapters.map((chapter, index) => (
-            <div key={index} className="chapter-input">
-              <input 
-                type="text"
-                value={chapter.title}
-                onChange={(e) => updateChapter(index, 'title', e.target.value)}
-                placeholder="Titre du chapitre"
+            <div key={index} className="chapter-container">
+              <div className="chapter-input">
+                <input
+                  type="text"
+                  placeholder="Titre du chapitre"
+                  value={chapter.title}
+                  onChange={(e) => handleChapterChange(index, 'title', e.target.value)}
+                />
+                <input
+                  type="number"
+                  placeholder="Page"
+                  value={chapter.pageNumber}
+                  onChange={(e) => handleChapterChange(index, 'pageNumber', parseInt(e.target.value) || 1)}
+                  min="1"
+                />
+                <button 
+                  type="button" 
+                  className="remove-chapter"
+                  onClick={() => removeChapter(index)}
+                >
+                  &times;
+                </button>
+              </div>
+              <textarea
+                className="chapter-content"
+                placeholder="Contenu du chapitre"
+                value={chapter.content}
+                onChange={(e) => handleChapterChange(index, 'content', e.target.value)}
+                rows={5}
               />
-              <input 
-                type="number"
-                value={chapter.startPage}
-                onChange={(e) => updateChapter(index, 'startPage', e.target.value)}
-                min="1"
-                max={totalPages}
-                placeholder="Page de début"
-              />
-              <button 
-                type="button" 
-                className="remove-chapter"
-                onClick={() => removeChapter(index)}
-              >
-                ×
-              </button>
             </div>
           ))}
-          <button type="button" className="add-chapter" onClick={addChapter}>
+          <button 
+            type="button" 
+            className="add-chapter"
+            onClick={addChapter}
+          >
             + Ajouter un chapitre
           </button>
         </div>

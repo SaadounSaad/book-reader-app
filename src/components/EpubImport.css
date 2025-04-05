@@ -1,0 +1,103 @@
+/* EpubImport.css */
+.epub-import-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+}
+
+.epub-import-form {
+  background-color: var(--bg-secondary, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 2rem;
+  width: 90%;
+  max-width: 600px;
+}
+
+.epub-import-form h2 {
+  margin-top: 0;
+  color: var(--text-primary, #333);
+  text-align: center;
+}
+
+.import-field {
+  margin-bottom: 1.5rem;
+}
+
+.import-field label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.import-field input[type="file"] {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+}
+
+.import-error {
+  color: #e53935;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: rgba(229, 57, 53, 0.1);
+  border-radius: 4px;
+}
+
+.import-progress {
+  margin: 1.5rem 0;
+}
+
+.progress-bar {
+  height: 12px;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary-color, #4caf50);
+  transition: width 0.3s ease;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.cancel-btn, .import-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background-color: var(--bg-tertiary, #f0f0f0);
+  color: var(--text-secondary, #666);
+  border: none;
+}
+
+.import-btn {
+  background-color: var(--primary-color, #4caf50);
+  color: white;
+  border: none;
+}
+
+.import-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
