@@ -390,72 +390,99 @@ const Reader = ({
     
     return <p>Aucun contenu disponible pour cette page.</p>;
   };
-  return (
-    <div 
-      className={`reader-container theme-${theme}`} 
-      ref={readerRef}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Barre de navigation supérieure */}
-      <div className="reader-navbar">
-        <Link to="/" className="nav-button">
-          <span>←</span> Bibliothèque
+  // Dans la partie rendu de votre Reader.js
+return (
+  <div 
+    className={`reader-container theme-${theme}`} 
+    ref={readerRef}
+    onTouchStart={handleTouchStart}
+    onTouchEnd={handleTouchEnd}
+  >
+    {/* Barre de navigation supérieure */}
+    <div className="reader-navbar">
+      <Link to="/" className="nav-button">
+        <span>←</span> Bibliothèque
+      </Link>
+      <div className="reader-title">
+        <h2>{book.title}</h2>
+        <p>{book.chapters[currentChapter]?.title || `Chapitre ${currentChapter + 1}`}</p>
+      </div>
+      <div className="reader-tools">
+        <button
+          className="nav-button search-button"
+          onClick={() => setSearchOpen(true)}
+          title="Rechercher"
+        >
+          <span>🔍</span>
+        </button>
+        <Link to={`/stats/${book.id}`} className="nav-button stats-button" title="Statistiques">
+          <span>📊</span>
         </Link>
-        <div className="reader-title">
-          <h2>{book.title}</h2>
-          <p>{book.chapters[currentChapter]?.title || `Chapitre ${currentChapter + 1}`}</p>
+        <button 
+          className="nav-button bookmark-button" 
+          onClick={toggleBookmark}
+          title={currentBookmark ? "Supprimer le signet" : "Ajouter un signet"}
+        >
+          <span>{currentBookmark ? "★" : "☆"}</span>
+        </button>
+        <button 
+          className="nav-button bookmarks-button" 
+          onClick={() => setBookmarksOpen(!bookmarksOpen)}
+          title="Liste des signets"
+        >
+          <span>📑</span>
+        </button>
+        <button 
+          className="nav-button settings-button" 
+          onClick={() => setSettingsOpen(!settingsOpen)}
+          title="Paramètres"
+        >
+          <span>⚙️</span>
+        </button>
+        <button 
+          className="nav-button menu-button" 
+          onClick={() => setMenuOpen(!menuOpen)}
+          title="Chapitres"
+        >
+          <span>≡</span>
+        </button>
+        <button 
+          className="nav-button annotations-button" 
+          onClick={() => setAnnotationsOpen(!annotationsOpen)}
+          title="Annotations"
+        >
+          <span>📝</span>
+        </button>
+      </div>
+    </div>
+    
+    {/* Structure principale avec sidebar et contenu */}
+    <div className="reader-layout">
+      {/* Menu des chapitres à gauche (toujours visible) */}
+      <div className={`chapters-sidebar ${menuOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-header">
+          <h3>Chapitres</h3>
+          <button 
+            className="close-sidebar" 
+            onClick={() => setMenuOpen(false)}
+          >
+            ×
+          </button>
         </div>
-        <div className="reader-tools">
-          <button
-            className="nav-button search-button"
-            onClick={() => setSearchOpen(true)}
-            title="Rechercher"
-          >
-            <span>🔍</span>
-          </button>
-          <Link to={`/stats/${book.id}`} className="nav-button stats-button" title="Statistiques">
-            <span>📊</span>
-          </Link>
-          <button 
-            className="nav-button bookmark-button" 
-            onClick={toggleBookmark}
-            title={currentBookmark ? "Supprimer le signet" : "Ajouter un signet"}
-          >
-            <span>{currentBookmark ? "★" : "☆"}</span>
-          </button>
-          <button 
-            className="nav-button bookmarks-button" 
-            onClick={() => setBookmarksOpen(!bookmarksOpen)}
-            title="Liste des signets"
-          >
-            <span>📑</span>
-          </button>
-          <button 
-            className="nav-button settings-button" 
-            onClick={() => setSettingsOpen(!settingsOpen)}
-            title="Paramètres"
-          >
-            <span>⚙️</span>
-          </button>
-          <button 
-            className="nav-button menu-button" 
-            onClick={() => setMenuOpen(!menuOpen)}
-            title="Chapitres"
-          >
-            <span>≡</span>
-          </button>
-          <button 
-            className="nav-button annotations-button" 
-            onClick={() => setAnnotationsOpen(!annotationsOpen)}
-            title="Annotations"
-          >
-            <span>📝</span>
-          </button>
+        <div className="chapters-list">
+          {book.chapters.map((chapter, index) => (
+            <div 
+              key={index} 
+              className={`chapter-item ${index === currentChapter ? 'active' : ''}`}
+              onClick={() => goToChapter(index)}
+            >
+              {chapter.title || `Chapitre ${index + 1}`}
+            </div>
+          ))}
         </div>
       </div>
       
-      {/* Contenu du livre */}
+      {/* Contenu principal du livre */}
       <div 
         className="reader-content" 
         style={{ fontSize: `${fontSize}px` }}
@@ -465,96 +492,81 @@ const Reader = ({
         <div className="page-content">
           {renderBookContent()}
         </div>
-      </div>
-      
-      {/* Barre de progression en bas */}
-      <ReadingProgress 
-        currentPage={currentPage}
-        totalPages={book.totalPages}
-        onPageChange={goToPage}
-      />
-      
-      {/* Boutons de navigation */}
-      <div className="page-navigation">
-        <button 
-          className="nav-button prev-page" 
-          onClick={goToPrevPage}
-          disabled={currentPage <= 1}
-        >
-          ←
-        </button>
-        <button 
-          className="nav-button next-page" 
-          onClick={goToNextPage}
-          disabled={currentPage >= book.totalPages}
-        >
-          →
-        </button>
-      </div>
-      
-      {/* Panneaux flottants */}
-      {menuOpen && (
-        <ChapterMenu 
-          chapters={book.chapters} 
-          currentChapter={currentChapter}
-          onChapterSelect={goToChapter}
-          onClose={() => setMenuOpen(false)}
-        />
-      )}
-      
-      {settingsOpen && (
-        <SettingsPanel 
-          theme={theme}
-          fontSize={fontSize}
-          onThemeChange={setTheme}
-          onFontSizeChange={setFontSize}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
-      
-      {bookmarksOpen && (
-        <BookmarksList 
-          bookmarks={book.bookmarks || []}
-          onBookmarkSelect={goToPage}
-          onClose={() => setBookmarksOpen(false)}
-        />
-      )}
-      
-      {searchOpen && (
-        <SearchPanel 
-          bookContent={bookContent}
-          currentPage={currentPage}
-          onResultClick={handleSearchResult}
-          onClose={() => setSearchOpen(false)}
-        />
-      )}
-      
-      {selectedText && (
-        <div className="text-selection-menu">
-          <button onClick={() => setAnnotationOpen(true)}>Annoter</button>
+        
+        {/* Boutons de navigation simplifiés (sans numéros de page) */}
+        <div className="page-navigation">
+          <button 
+            className="nav-button prev-page" 
+            onClick={goToPrevPage}
+            disabled={currentPage <= 1}
+          >
+            ←
+          </button>
+          <button 
+            className="nav-button next-page" 
+            onClick={goToNextPage}
+            disabled={currentPage >= book.totalPages}
+          >
+            →
+          </button>
         </div>
-      )}
-      
-      {annotationOpen && (
-        <AnnotationPanel 
-          selectedText={selectedText}
-          onSave={handleAddAnnotation}
-          onCancel={() => {
-            setAnnotationOpen(false);
-            setSelectedText('');
-          }}
-        />
-      )}
-      {annotationsOpen && (
-        <AnnotationsList 
-          annotations={book.annotations || []}
-          onAnnotationSelect={goToPage}
-          onDeleteAnnotation={(index) => removeAnnotation(book.id, index)}
-          onClose={() => setAnnotationsOpen(false)}
-        />
-      )}
+      </div>
     </div>
-  );
+    
+    {/* Panneaux flottants */}
+    {settingsOpen && (
+      <SettingsPanel 
+        theme={theme}
+        fontSize={fontSize}
+        onThemeChange={setTheme}
+        onFontSizeChange={setFontSize}
+        onClose={() => setSettingsOpen(false)}
+      />
+    )}
+    
+    {bookmarksOpen && (
+      <BookmarksList 
+        bookmarks={book.bookmarks || []}
+        onBookmarkSelect={goToPage}
+        onClose={() => setBookmarksOpen(false)}
+      />
+    )}
+    
+    {searchOpen && (
+      <SearchPanel 
+        bookContent={bookContent}
+        currentPage={currentPage}
+        onResultClick={handleSearchResult}
+        onClose={() => setSearchOpen(false)}
+      />
+    )}
+    
+    {selectedText && (
+      <div className="text-selection-menu">
+        <button onClick={() => setAnnotationOpen(true)}>Annoter</button>
+      </div>
+    )}
+    
+    {annotationOpen && (
+      <AnnotationPanel 
+        selectedText={selectedText}
+        onSave={handleAddAnnotation}
+        onCancel={() => {
+          setAnnotationOpen(false);
+          setSelectedText('');
+        }}
+      />
+    )}
+    {annotationsOpen && (
+      <AnnotationsList 
+        annotations={book.annotations || []}
+        onAnnotationSelect={goToPage}
+        onDeleteAnnotation={(index) => removeAnnotation(book.id, index)}
+        onClose={() => setAnnotationsOpen(false)}
+      />
+    )}
+  </div>
+);
 };
 
 export default Reader;
