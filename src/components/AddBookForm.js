@@ -1,4 +1,4 @@
-// AddBookForm.js
+// src/components/AddBookForm.js
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import './AddBookForm.css';
@@ -12,6 +12,7 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
   const [chapters, setChapters] = useState([
     { title: '', pageNumber: 1, content: '' }
   ]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Gestion du changement de chapitre
   const handleChapterChange = (index, field, value) => {
@@ -35,54 +36,47 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
     }
   };
   
-  // Fonction pour sauvegarder l'image dans localStorage
-  const saveImage = async (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        // Générer un nom unique pour l'image
-        const fileName = `cover_${title.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
-        // Stocker l'image en base64 dans localStorage
-        localStorage.setItem(fileName, reader.result);
-        resolve(fileName);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-  
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Définir le chemin de la couverture
-    let coverPath = '/covers/default.jpg'; // Par défaut
-    
-    if (coverFile) {
-      // Sauvegarder l'image et obtenir son chemin
-      coverPath = await saveImage(coverFile);
+    try {
+      // Préparer les données du livre
+      let coverImage = '/covers/default.jpg';
+      
+      // Si une couverture a été sélectionnée, la convertir en base64
+      if (coverFile) {
+        coverImage = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(coverFile);
+        });
+      }
+      
+      // Créer l'objet livre
+      const newBook = {
+        title,
+        author,
+        cover: coverImage,
+        totalPages: parseInt(totalPages),
+        chapters: chapters.map((chapter, index) => ({
+          title: chapter.title || `Chapitre ${index + 1}`,
+          pageNumber: parseInt(chapter.pageNumber) || (index + 1),
+          content: chapter.content || ''
+        })),
+        createdAt: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      };
+      
+      // Ajouter le livre via la fonction passée en prop
+      await onAddBook(newBook);
+      
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du livre:", error);
+      alert("Une erreur est survenue lors de l'ajout du livre.");
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    // Créer un nouvel objet livre compatible avec votre structure dans App.js
-    const newBook = {
-      id: Number(Date.now()), // Ou uuidv4() si vous préférez utiliser des UUID
-      title,
-      author,
-      cover: coverPath,
-      totalPages: parseInt(totalPages),
-      currentPage: 1,
-      lastModified: new Date().toISOString(),
-      chapters: chapters.map((chapter, index) => ({
-        id: index + 1,
-        title: chapter.title,
-        startPage: parseInt(chapter.pageNumber),
-        content: chapter.content
-      })),
-      bookmarks: [],
-      annotations: []
-    };
-    
-    console.log("Nouveau livre créé:", newBook);
-    onAddBook(newBook);
-    onCancel(); // Fermer le formulaire
   };
   
   // Gestion des chapitres
@@ -95,7 +89,7 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
   };
   
   const removeChapter = (index) => {
-    if (chapters.length > 1) { // Garder au moins un chapitre
+    if (chapters.length > 1) {
       const updatedChapters = [...chapters];
       updatedChapters.splice(index, 1);
       setChapters(updatedChapters);
@@ -210,8 +204,12 @@ const AddBookForm = ({ onAddBook, onCancel }) => {
           <button type="button" className="cancel-button" onClick={onCancel}>
             Annuler
           </button>
-          <button type="submit" className="submit-button">
-            Ajouter le livre
+          <button 
+            type="submit" 
+            className="submit-button"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Ajout en cours...' : 'Ajouter le livre'}
           </button>
         </div>
       </form>

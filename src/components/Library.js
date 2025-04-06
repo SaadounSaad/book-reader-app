@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import './Library.css';
+import { addBook } from '../services/bookService';
 import AddBookForm from './AddBookForm';
+import './Library.css';
 import EpubImport from './EpubImport';
+import { getCurrentUser } from '../services/authService';
 
 // Composant pour afficher la couverture du livre
 const BookCover = ({ coverPath }) => {
@@ -28,7 +30,7 @@ const BookCover = ({ coverPath }) => {
   return <img src={coverSrc} alt="Couverture du livre" />;
 };
 
-const Library = ({ books, addBook }) => {
+const Library = ({ books, addBook, refreshBooks }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title');
   const [filterBy, setFilterBy] = useState('all');
@@ -73,21 +75,14 @@ const Library = ({ books, addBook }) => {
   };
 
   // Fonction pour gérer l'ajout d'un livre
-  const handleAddBook = (newBook) => {
-    setIsLoading(true);
-    
+  const handleAddBook = async (bookData) => {
     try {
-      // Appeler la fonction d'ajout de livre passée en prop
-      addBook(newBook);
-      console.log("Livre ajouté avec succès:", newBook);
-      
-      // Fermer le formulaire après ajout réussi
+      await addBook(getCurrentUser().uid, bookData);
+      refreshBooks(); // Rafraîchir la liste des livres après l'ajout
       setShowAddForm(false);
     } catch (error) {
       console.error("Erreur lors de l'ajout du livre:", error);
-      alert("Une erreur est survenue lors de l'ajout du livre. Veuillez réessayer.");
-    } finally {
-      setIsLoading(false);
+      // Gérer l'erreur (afficher un message, etc.)
     }
   };
 

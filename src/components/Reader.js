@@ -6,87 +6,227 @@ import SettingsPanel from './SettingsPanel';
 import BookmarksList from './BookmarksList';
 import AnnotationPanel from './AnnotationPanel';
 import SearchPanel from './SearchPanel';
-import ReadingProgress from './ReadingProgress';
 import AnnotationsList from './AnnotationsList';
 import './Reader.css';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  getDoc, 
+  doc 
+} from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { 
+  getBookChapters,
+  getReadingProgress,
+  updateReadingProgress 
+} from '../services/bookService';
 
 const Reader = ({ 
   books, 
+  user,
   updateBookProgress, 
   recordReadingSession, 
   addBookmark, 
   removeBookmark,
   addAnnotation,
-  removeAnnotation 
+  removeAnnotation,
+  appSettings,
+  themeSettings
 }) => {
   const { bookId } = useParams();
   const [book, setBook] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentChapter, setCurrentChapter] = useState(0);
+  const [chapters, setChapters] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [annotationOpen, setAnnotationOpen] = useState(false);
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(themeSettings?.defaultTheme || 'light');
   const [fontSize, setFontSize] = useState(16);
   const [swipeStart, setSwipeStart] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [bookContent, setBookContent] = useState({});
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
+  const [chapterScrollPositions, setChapterScrollPositions] = useState({});
+  const [loading, setLoading] = useState(true);
   const readerRef = useRef(null);
+  const contentRef = useRef(null);
 
   // Enregistrement de la session
   const [sessionStartTime, setSessionStartTime] = useState(Date.now());
   const [sessionPagesRead, setSessionPagesRead] = useState(0);
   const [lastRecordedPage, setLastRecordedPage] = useState(0);
   
-  // Trouver le livre correspondant à l'ID
-  useEffect(() => {
-    if (books && bookId) {
-      const foundBook = books.find(b => b.id.toString() === bookId.toString());
-      if (foundBook) {
-        setBook(foundBook);
-        setCurrentPage(foundBook.currentPage || 1);
-        
-        // Trouver le chapitre actuel en fonction de la page
-        const chapter = foundBook.chapters.findIndex(
-          (ch, index, arr) => {
-            const nextChapter = arr[index + 1];
-            const pageToUse = foundBook.currentPage || 1;
-            const startPage = ch.startPage || ch.pageNumber; // Support des deux formats
-            
-            return startPage <= pageToUse && 
-                  (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageToUse);
-          }
-        );
-        
-        setCurrentChapter(chapter !== -1 ? chapter : 0);
-        setLastRecordedPage(foundBook.currentPage || 1);
-        
-        // Extraire le contenu réel du livre depuis les chapitres
-        const content = {};
-        foundBook.chapters.forEach((chapter, index) => {
-          const startPage = chapter.startPage || chapter.pageNumber;
-          const endPage = index < foundBook.chapters.length - 1 
-            ? (foundBook.chapters[index + 1].startPage || foundBook.chapters[index + 1].pageNumber) - 1 
-            : foundBook.totalPages;
-            
-          // Remplir les pages de ce chapitre avec son contenu
-          for (let i = startPage; i <= endPage; i++) {
-            content[i] = chapter.content || `Contenu de la page ${i}. ورد يوم الجمعة`;
-          }
-        });
-        
-        setBookContent(content);
+  // Fonction pour sauvegarder la position de défilement
+  const saveScrollPosition = async () => {
+    if (contentRef.current && book) {
+      const currentPos = contentRef.current.scrollTop;
+      
+      // Mettre à jour l'état local
+      setChapterScrollPositions(prev => ({
+        ...prev,
+        [currentChapter]: currentPos
+      }));
+      
+      // Si l'utilisateur est connecté, sauvegarder dans Firebase
+      if (user) {
+        try {
+          // Préparer les données de progression
+          const updatedPositions = {
+            ...chapterScrollPositions,
+            [currentChapter]: currentPos
+          };
+          
+          // Mettre à jour dans Firebase
+          await updateReadingProgress(user.uid, book.id, {
+            currentChapter,
+            currentPage,
+            scrollPositions: updatedPositions
+          });
+        } catch (error) {
+          console.error("Erreur lors de la sauvegarde de la position:", error);
+        }
       }
     }
+  };
+  
+  // Trouver le livre correspondant à l'ID
+  useEffect(() => {
+    const loadBookData = async () => {
+      setLoading(true);
+      
+      try {
+        let foundBook;
+        let bookChapters;
+        let progress;
+        
+        // Si l'utilisateur est connecté, essayer de charger depuis Firebase
+        if (user && bookId) {
+          try {
+            // Obtenir les détails du livre depuis Firebase
+            const bookDoc = await getDoc(doc(db, "books", bookId));
+            if (bookDoc.exists()) {
+              foundBook = { id: bookDoc.id, ...bookDoc.data() };
+              
+              // Obtenir les chapitres
+              bookChapters = await getBookChapters(bookId);
+              
+              // Obtenir la progression
+              progress = await getReadingProgress(user.uid, bookId);
+              
+              // Si on a trouvé les données dans Firebase, utiliser celles-ci
+              if (foundBook && bookChapters && bookChapters.length > 0) {
+                setBook(foundBook);
+                setChapters(bookChapters);
+                
+                if (progress) {
+                  setCurrentPage(progress.currentPage || 1);
+                  setCurrentChapter(progress.currentChapter || 0);
+                  
+                  // Charger les positions de défilement
+                  if (progress.scrollPositions) {
+                    setChapterScrollPositions(progress.scrollPositions);
+                  }
+                } else {
+                  setCurrentPage(foundBook.currentPage || 1);
+                  setCurrentChapter(0);
+                }
+                
+                setLastRecordedPage(currentPage);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (error) {
+            console.error("Erreur lors du chargement depuis Firebase:", error);
+          }
+        }
+        
+        // Si on n'a pas pu charger depuis Firebase ou si l'utilisateur n'est pas connecté,
+        // utiliser les données locales
+        if (books && bookId) {
+          foundBook = books.find(b => b.id.toString() === bookId.toString());
+          if (foundBook) {
+            setBook(foundBook);
+            setCurrentPage(foundBook.currentPage || 1);
+            
+            // Trouver le chapitre actuel en fonction de la page
+            const chapter = foundBook.chapters.findIndex(
+              (ch, index, arr) => {
+                const nextChapter = arr[index + 1];
+                const pageToUse = foundBook.currentPage || 1;
+                const startPage = ch.startPage || ch.pageNumber; // Support des deux formats
+                
+                return startPage <= pageToUse && 
+                      (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageToUse);
+              }
+            );
+            
+            setCurrentChapter(chapter !== -1 ? chapter : 0);
+            setLastRecordedPage(foundBook.currentPage || 1);
+            
+            // Extraire le contenu réel du livre depuis les chapitres
+            const content = {};
+            foundBook.chapters.forEach((chapter, index) => {
+              const startPage = chapter.startPage || chapter.pageNumber;
+              const endPage = index < foundBook.chapters.length - 1 
+                ? (foundBook.chapters[index + 1].startPage || foundBook.chapters[index + 1].pageNumber) - 1 
+                : foundBook.totalPages;
+                
+              // Remplir les pages de ce chapitre avec son contenu
+              for (let i = startPage; i <= endPage; i++) {
+                content[i] = chapter.content || `Contenu de la page ${i}. ورد يوم الجمعة`;
+              }
+            });
+            
+            setBookContent(content);
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement du livre:", error);
+      } finally {
+        setLoading(false);
+      }
+      
+      // Initialiser la session de lecture
+      setSessionStartTime(Date.now());
+      setSessionPagesRead(0);
+    };
     
-    // Initialiser la session de lecture
-    setSessionStartTime(Date.now());
-    setSessionPagesRead(0);
-  }, [books, bookId]);
+    loadBookData();
+  }, [books, bookId, user]);
+  
+  // Restaurer la position de défilement lors du changement de chapitre
+  useEffect(() => {
+    if (contentRef.current && book && !loading) {
+      // Si nous avons une position sauvegardée pour ce chapitre, l'utiliser
+      if (chapterScrollPositions[currentChapter]) {
+        setTimeout(() => {
+          if (contentRef.current) {
+            contentRef.current.scrollTop = chapterScrollPositions[currentChapter];
+          }
+        }, 100);
+      } else {
+        // Sinon, aller au début du chapitre
+        contentRef.current.scrollTop = 0;
+      }
+    }
+  }, [currentChapter, book, chapterScrollPositions, loading]);
+  
+  // Sauvegardez la position avant de quitter
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveScrollPosition();
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      saveScrollPosition();
+    };
+  }, []);
   
   // Démarrer un chronomètre pour enregistrer des sessions courtes régulièrement
   useEffect(() => {
@@ -141,42 +281,35 @@ const Reader = ({
     }
   }, [book, currentPage, lastRecordedPage, currentChapter, updateBookProgress]);
   
-  // Gestionnaires de navigation
-  const goToNextPage = () => {
-    if (book && currentPage < book.totalPages) {
-      setCurrentPage(prev => prev + 1);
-      
-      // Vérifier si on change de chapitre
-      const nextChapter = book.chapters.findIndex(
-        ch => (ch.startPage || ch.pageNumber) > currentPage && (ch.startPage || ch.pageNumber) <= currentPage + 1
-      );
-      
-      if (nextChapter !== -1) {
-        setCurrentChapter(nextChapter);
-      }
+  // Reste du code inchangé...
+  const goToNextChapter = () => {
+    if (book && currentChapter < book.chapters.length - 1) {
+      goToChapter(currentChapter + 1);
     }
   };
   
-  const goToPrevPage = () => {
-    if (book && currentPage > 1) {
-      setCurrentPage(prev => prev - 1);
-      
-      // Vérifier si on change de chapitre
-      const prevChapter = book.chapters
-        .slice()
-        .reverse()
-        .findIndex(ch => (ch.startPage || ch.pageNumber) <= currentPage - 1);
-      
-      if (prevChapter !== -1) {
-        setCurrentChapter(book.chapters.length - 1 - prevChapter);
-      }
+  const goToPrevChapter = () => {
+    if (book && currentChapter > 0) {
+      goToChapter(currentChapter - 1);
     }
   };
   
   const goToChapter = (chapterIndex) => {
     if (book && book.chapters[chapterIndex]) {
-      setCurrentPage(book.chapters[chapterIndex].startPage || book.chapters[chapterIndex].pageNumber);
+      // Sauvegarder la position actuelle avant de changer
+      saveScrollPosition();
+      
+      const pageNumber = book.chapters[chapterIndex].startPage || book.chapters[chapterIndex].pageNumber || 1;
+      
+      setCurrentPage(pageNumber);
       setCurrentChapter(chapterIndex);
+      updateBookProgress(book.id, pageNumber, chapterIndex);
+      
+      // Réinitialiser la position de défilement (scrollTop à 0)
+      if (contentRef.current) {
+        contentRef.current.scrollTop = 0;
+      }
+      
       setMenuOpen(false);
     }
   };
@@ -208,9 +341,6 @@ const Reader = ({
   const handleSearchResult = (pageNumber, textIndex) => {
     goToPage(pageNumber);
     setSearchOpen(false);
-    
-    // Dans une application réelle, on pourrait aussi faire défiler la page jusqu'à la position du texte
-    // et mettre en surbrillance le texte trouvé
   };
   
   // Gestionnaires de sélection de texte
@@ -231,16 +361,103 @@ const Reader = ({
     }
   };
   
+  // Fonction pour extraire du texte à la position actuelle (pour le contexte du signet)
+  const getTextAtCurrentPosition = () => {
+    if (contentRef.current) {
+      // Calculez la position visible approximative
+      const scrollPos = contentRef.current.scrollTop;
+      const visibleHeight = contentRef.current.clientHeight;
+      const midPoint = scrollPos + (visibleHeight / 2);
+      
+      // Trouvez l'élément le plus proche du milieu de l'écran
+      const elements = contentRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
+      let closestElement = null;
+      let minDistance = Infinity;
+      
+      elements.forEach(element => {
+        const rect = element.getBoundingClientRect();
+        const elementMiddle = rect.top + (rect.height / 2);
+        const distance = Math.abs(elementMiddle - midPoint);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestElement = element;
+        }
+      });
+      
+      // Retournez le texte ou une chaîne vide si rien n'est trouvé
+      return closestElement ? closestElement.textContent.substring(0, 50) + '...' : '';
+    }
+    return '';
+  };
+  
+  // Fonction pour vérifier si la position actuelle est déjà marquée
+  const isCurrentPositionBookmarked = () => {
+    if (!book || !book.bookmarks || !contentRef.current) return false;
+    
+    return book.bookmarks.some(bm => 
+      bm.chapterIndex === currentChapter && 
+      Math.abs(bm.scrollPosition - contentRef.current.scrollTop) < 100
+    );
+  };
+  
+  // Fonction pour ajouter un signet à la position actuelle
+  const addBookmarkAtCurrentPosition = () => {
+    if (book && contentRef.current) {
+      const scrollPosition = contentRef.current.scrollTop;
+      const bookmarkData = {
+        chapterIndex: currentChapter,
+        scrollPosition: scrollPosition,
+        text: getTextAtCurrentPosition(),
+        date: new Date().toISOString()
+      };
+      
+      addBookmark(book.id, bookmarkData);
+    }
+  };
+  
   // Gestionnaires de signets
   const toggleBookmark = () => {
-    if (book) {
-      const hasBookmark = book.bookmarks && book.bookmarks.includes(currentPage);
-      
-      if (hasBookmark) {
-        removeBookmark(book.id, currentPage);
+    if (book && contentRef.current) {
+      if (isCurrentPositionBookmarked()) {
+        // Trouver l'index du signet à supprimer
+        const bookmarkIndex = book.bookmarks.findIndex(bm => 
+          bm.chapterIndex === currentChapter && 
+          Math.abs(bm.scrollPosition - contentRef.current.scrollTop) < 100
+        );
+        
+        if (bookmarkIndex !== -1) {
+          removeBookmark(book.id, bookmarkIndex);
+        }
       } else {
-        addBookmark(book.id, currentPage);
+        addBookmarkAtCurrentPosition();
       }
+    }
+  };
+  
+  // Navigation vers un signet spécifique
+  const goToBookmark = (chapterIndex, scrollPosition) => {
+    if (book && book.chapters[chapterIndex]) {
+      // Sauvegarder d'abord la position actuelle
+      saveScrollPosition();
+      
+      setCurrentChapter(chapterIndex);
+      const pageNumber = book.chapters[chapterIndex].startPage || book.chapters[chapterIndex].pageNumber || 1;
+      setCurrentPage(pageNumber);
+      updateBookProgress(book.id, pageNumber, chapterIndex);
+      
+      // Définir immédiatement la position de défilement
+      if (contentRef.current) {
+        // On fixe d'abord à 0 pour s'assurer qu'on est au début du chapitre
+        contentRef.current.scrollTop = 0;
+        
+        // Puis on utilise un setTimeout pour s'assurer que le contenu est chargé
+        setTimeout(() => {
+          contentRef.current.scrollTop = scrollPosition;
+        }, 50);
+      }
+      
+      setBookmarksOpen(false);
     }
   };
   
@@ -266,20 +483,20 @@ const Reader = ({
     // Si le mouvement horizontal est plus important que le vertical et suffisamment grand
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
       if (diffX > 0) {
-        goToNextPage(); // Swipe gauche
+        goToNextChapter();
       } else {
-        goToPrevPage(); // Swipe droit
+        goToPrevChapter();
       }
     }
   };
   
-  // Gestionnaire de racccourcis clavier
+  // Gestionnaire de raccourcis clavier
   const handleKeyDown = (e) => {
     // Navigation avec les flèches
     if (e.key === 'ArrowRight') {
-      goToNextPage();
+      goToNextChapter();
     } else if (e.key === 'ArrowLeft') {
-      goToPrevPage();
+      goToPrevChapter();
     } 
     // Raccourci de recherche (Ctrl+F)
     else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -287,39 +504,7 @@ const Reader = ({
       setSearchOpen(true);
     }
   };
-  // Dans Reader.js
-  useEffect(() => {
-    if (book && book.source === 'epub') {
-      // Créer un style scope pour l'EPUB qui n'affecte pas le reste de l'application
-      const styleElement = document.createElement('style');
-      styleElement.id = 'epub-styles';
-      styleElement.innerHTML = `
-        .page-content {
-          overflow-y: auto;
-          height: calc(100vh - 140px); /* Ajustez selon votre mise en page */
-        }
-        
-        .page-content * {
-          max-width: 100%;
-        }
-        
-        .page-content img {
-          display: block;
-          margin: 0 auto;
-          max-width: 100%;
-          height: auto;
-        }
-      `;
-      document.head.appendChild(styleElement);
-      
-      return () => {
-        const existingStyle = document.getElementById('epub-styles');
-        if (existingStyle) {
-          existingStyle.remove();
-        }
-      };
-    }
-  }, [book]);
+  
   // Ajouter l'écouteur d'événements de clavier
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -328,8 +513,12 @@ const Reader = ({
     };
   }, [currentPage, book]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  if (!book) {
+  if (loading) {
     return <div className="reader-loading">Chargement...</div>;
+  }
+  
+  if (!book) {
+    return <div className="reader-loading">Livre non trouvé</div>;
   }
   
   // Obtenir le contenu de la page actuelle
@@ -350,223 +539,226 @@ const Reader = ({
     return currentChapterContent;
   };
   
-  const currentChapterContent = getCurrentChapterContent();
-  const currentBookmark = book.bookmarks && book.bookmarks.includes(currentPage);
-  const progress = (currentPage / book.totalPages) * 100;
+  // Fonction de rendu du contenu du livre
   const renderBookContent = () => {
     if (!book) return <p>Chargement...</p>;
     
-    // Si c'est un livre EPUB
-    if (book.source === 'epub') {
-      const currentChapterContent = getCurrentChapterContent();
-      
-      if (currentChapterContent && currentChapterContent.content) {
-        // Pour les EPUB, on affiche toujours avec dangerouslySetInnerHTML car c'est du HTML
+    // Si c'est un livre EPUB ou un format standard
+    const currentChapterContent = getCurrentChapterContent();
+    
+    if (currentChapterContent && currentChapterContent.content) {
+      // Si le contenu contient du HTML
+      if (currentChapterContent.content.includes('<') && currentChapterContent.content.includes('>')) {
         return (
           <div className="epub-content">
             <div dangerouslySetInnerHTML={{ __html: currentChapterContent.content }} />
           </div>
         );
-      }
-    } 
-    // Livres standards créés manuellement
-    else {
-      const currentChapterContent = getCurrentChapterContent();
-      
-      if (currentChapterContent && currentChapterContent.content) {
-        if (currentChapterContent.content.includes('<') && currentChapterContent.content.includes('>')) {
-          return <div dangerouslySetInnerHTML={{ __html: currentChapterContent.content }} />;
-        } else {
-          return (
-            <div>
-              {currentChapterContent.content.split('\n').map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
-              ))}
-            </div>
-          );
-        }
+      } else {
+        // Sinon, c'est du texte simple
+        return (
+          <div>
+            {currentChapterContent.content.split('\n').map((paragraph, i) => (
+              <p key={i}>{paragraph}</p>
+            ))}
+          </div>
+        );
       }
     }
     
     return <p>Aucun contenu disponible pour cette page.</p>;
   };
-  // Dans la partie rendu de votre Reader.js
-return (
-  <div 
-    className={`reader-container theme-${theme}`} 
-    ref={readerRef}
-    onTouchStart={handleTouchStart}
-    onTouchEnd={handleTouchEnd}
-  >
-    {/* Barre de navigation supérieure */}
-    <div className="reader-navbar">
-      <Link to="/" className="nav-button">
-        <span>←</span> Bibliothèque
-      </Link>
-      <div className="reader-title">
-        <h2>{book.title}</h2>
-        <p>{book.chapters[currentChapter]?.title || `Chapitre ${currentChapter + 1}`}</p>
-      </div>
-      <div className="reader-tools">
-        <button
-          className="nav-button search-button"
-          onClick={() => setSearchOpen(true)}
-          title="Rechercher"
-        >
-          <span>🔍</span>
-        </button>
-        <Link to={`/stats/${book.id}`} className="nav-button stats-button" title="Statistiques">
-          <span>📊</span>
+  
+  const currentBookmark = isCurrentPositionBookmarked();
+  
+  // Le reste du JSX reste pratiquement inchangé...
+  return (
+    <div 
+      className={`reader-container theme-${theme}`} 
+      ref={readerRef}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Barre de navigation supérieure */}
+      <div className="reader-navbar">
+        <Link to="/" className="nav-button">
+          <span>←</span> Bibliothèque
         </Link>
-        <button 
-          className="nav-button bookmark-button" 
-          onClick={toggleBookmark}
-          title={currentBookmark ? "Supprimer le signet" : "Ajouter un signet"}
-        >
-          <span>{currentBookmark ? "★" : "☆"}</span>
-        </button>
-        <button 
-          className="nav-button bookmarks-button" 
-          onClick={() => setBookmarksOpen(!bookmarksOpen)}
-          title="Liste des signets"
-        >
-          <span>📑</span>
-        </button>
-        <button 
-          className="nav-button settings-button" 
-          onClick={() => setSettingsOpen(!settingsOpen)}
-          title="Paramètres"
-        >
-          <span>⚙️</span>
-        </button>
-        <button 
-          className="nav-button menu-button" 
+        
+        {/* Bouton de menu latéral juste après le lien vers la bibliothèque */}
+        <button
+          className="nav-button chapters-button"
           onClick={() => setMenuOpen(!menuOpen)}
           title="Chapitres"
         >
-          <span>≡</span>
+          <span>≡</span> Chapitres
         </button>
-        <button 
-          className="nav-button annotations-button" 
-          onClick={() => setAnnotationsOpen(!annotationsOpen)}
-          title="Annotations"
-        >
-          <span>📝</span>
-        </button>
-      </div>
-    </div>
-    
-    {/* Structure principale avec sidebar et contenu */}
-    <div className="reader-layout">
-      {/* Menu des chapitres à gauche (toujours visible) */}
-      <div className={`chapters-sidebar ${menuOpen ? 'open' : 'closed'}`}>
-        <div className="sidebar-header">
-          <h3>Chapitres</h3>
-          <button 
-            className="close-sidebar" 
-            onClick={() => setMenuOpen(false)}
-          >
-            ×
-          </button>
+        
+        <div className="reader-title">
+          <h2>{book.title}</h2>
+          <p>{book.chapters[currentChapter]?.title || `Chapitre ${currentChapter + 1}`}</p>
         </div>
-        <div className="chapters-list">
-          {book.chapters.map((chapter, index) => (
-            <div 
-              key={index} 
-              className={`chapter-item ${index === currentChapter ? 'active' : ''}`}
-              onClick={() => goToChapter(index)}
-            >
-              {chapter.title || `Chapitre ${index + 1}`}
-            </div>
-          ))}
+        
+        <div className="reader-tools">
+          <button
+            className="nav-button search-button"
+            onClick={() => setSearchOpen(true)}
+            title="Rechercher"
+          >
+            <span>🔍</span>
+          </button>
+          <Link to={`/stats/${book.id}`} className="nav-button stats-button" title="Statistiques">
+            <span>📊</span>
+          </Link>
+          <button 
+            className="nav-button bookmark-button" 
+            onClick={toggleBookmark}
+            title={currentBookmark ? "Supprimer le signet" : "Ajouter un signet"}
+          >
+            <span>{currentBookmark ? "★" : "☆"}</span>
+          </button>
+          <button 
+            className="nav-button bookmarks-button" 
+            onClick={() => setBookmarksOpen(!bookmarksOpen)}
+            title="Liste des signets"
+          >
+            <span>📑</span>
+          </button>
+          <button 
+            className="nav-button settings-button" 
+            onClick={() => setSettingsOpen(!settingsOpen)}
+            title="Paramètres"
+          >
+            <span>⚙️</span>
+          </button>
+          <button 
+            className="nav-button annotations-button" 
+            onClick={() => setAnnotationsOpen(!annotationsOpen)}
+            title="Annotations"
+          >
+            <span>📝</span>
+          </button>
         </div>
       </div>
       
-      {/* Contenu principal du livre */}
-      <div 
-        className="reader-content" 
-        style={{ fontSize: `${fontSize}px` }}
-        onMouseUp={handleTextSelection}
-        onTouchEnd={handleTextSelection}
-      >
-        <div className="page-content">
-          {renderBookContent()}
+      {/* Structure principale avec sidebar et contenu */}
+      <div className="reader-layout">
+        {/* Menu des chapitres à gauche */}
+        <div className={`chapters-sidebar ${menuOpen ? 'open' : ''}`}>
+          <div className="sidebar-header">
+            <h3>Chapitres</h3>
+            <button 
+              className="close-sidebar" 
+              onClick={() => setMenuOpen(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="chapters-list">
+            {book.chapters.map((chapter, index) => (
+              <div 
+                key={index} 
+                className={`chapter-item ${index === currentChapter ? 'active' : ''}`}
+                onClick={() => goToChapter(index)}
+              >
+                {chapter.title || `Chapitre ${index + 1}`}
+              </div>
+            ))}
+          </div>
         </div>
         
-        {/* Boutons de navigation simplifiés (sans numéros de page) */}
-        <div className="page-navigation">
-          <button 
-            className="nav-button prev-page" 
-            onClick={goToPrevPage}
-            disabled={currentPage <= 1}
-          >
-            ←
-          </button>
-          <button 
-            className="nav-button next-page" 
-            onClick={goToNextPage}
-            disabled={currentPage >= book.totalPages}
-          >
-            →
-          </button>
+        {/* Contenu principal du livre */}
+        <div 
+          className="reader-content" 
+          style={{ fontSize: `${fontSize}px` }}
+          onMouseUp={handleTextSelection}
+          onTouchEnd={handleTextSelection}
+          ref={contentRef}
+          onScroll={() => {
+            // Optionnel: sauvegarder la position pendant le défilement
+            // Pour des performances optimales, utiliser un débounce
+            saveScrollPosition();
+          }}
+        >
+          <div className="page-content">
+            {renderBookContent()}
+          </div>
         </div>
       </div>
-    </div>
-    
-    {/* Panneaux flottants */}
-    {settingsOpen && (
-      <SettingsPanel 
-        theme={theme}
-        fontSize={fontSize}
-        onThemeChange={setTheme}
-        onFontSizeChange={setFontSize}
-        onClose={() => setSettingsOpen(false)}
-      />
-    )}
-    
-    {bookmarksOpen && (
-      <BookmarksList 
-        bookmarks={book.bookmarks || []}
-        onBookmarkSelect={goToPage}
-        onClose={() => setBookmarksOpen(false)}
-      />
-    )}
-    
-    {searchOpen && (
-      <SearchPanel 
-        bookContent={bookContent}
-        currentPage={currentPage}
-        onResultClick={handleSearchResult}
-        onClose={() => setSearchOpen(false)}
-      />
-    )}
-    
-    {selectedText && (
-      <div className="text-selection-menu">
-        <button onClick={() => setAnnotationOpen(true)}>Annoter</button>
+      
+      {/* Boutons de navigation (pour changer de chapitre) */}
+      <div className="page-navigation">
+        <button 
+          className="nav-button prev-page" 
+          onClick={goToPrevChapter}
+          disabled={currentChapter <= 0}
+        >
+          ←
+        </button>
+        <button 
+          className="nav-button next-page" 
+          onClick={goToNextChapter}
+          disabled={currentChapter >= book.chapters.length - 1}
+        >
+          →
+        </button>
       </div>
-    )}
-    
-    {annotationOpen && (
-      <AnnotationPanel 
-        selectedText={selectedText}
-        onSave={handleAddAnnotation}
-        onCancel={() => {
-          setAnnotationOpen(false);
-          setSelectedText('');
-        }}
-      />
-    )}
-    {annotationsOpen && (
-      <AnnotationsList 
-        annotations={book.annotations || []}
-        onAnnotationSelect={goToPage}
-        onDeleteAnnotation={(index) => removeAnnotation(book.id, index)}
-        onClose={() => setAnnotationsOpen(false)}
-      />
-    )}
-  </div>
-);
+      
+      {/* Panneaux flottants */}
+      {settingsOpen && (
+        <SettingsPanel 
+          theme={theme}
+          fontSize={fontSize}
+          onThemeChange={setTheme}
+          onFontSizeChange={setFontSize}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      
+      {bookmarksOpen && (
+        <BookmarksList 
+          bookmarks={book.bookmarks || []}
+          onBookmarkSelect={goToBookmark}
+          onClose={() => setBookmarksOpen(false)}
+        />
+      )}
+      
+      {searchOpen && (
+        <SearchPanel 
+          bookContent={bookContent}
+          currentPage={currentPage}
+          onResultClick={handleSearchResult}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+      
+      {selectedText && (
+        <div className="text-selection-menu">
+          <button onClick={() => setAnnotationOpen(true)}>Annoter</button>
+        </div>
+      )}
+      
+      {annotationOpen && (
+        <AnnotationPanel 
+          selectedText={selectedText}
+          onSave={handleAddAnnotation}
+          onCancel={() => {
+            setAnnotationOpen(false);
+            setSelectedText('');
+          }}
+        />
+      )}
+      
+      {annotationsOpen && (
+        <AnnotationsList 
+          annotations={book.annotations || []}
+          onAnnotationSelect={goToPage}
+          onDeleteAnnotation={(index) => removeAnnotation(book.id, index)}
+          onClose={() => setAnnotationsOpen(false)}
+        />
+      )}
+    </div>
+  );
 };
 
 export default Reader;

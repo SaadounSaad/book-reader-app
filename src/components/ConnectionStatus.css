@@ -1,0 +1,30 @@
+/* src/components/ConnectionStatus.css */
+.connection-status {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.9rem;
+  text-align: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  max-width: 90%;
+}
+
+.connection-status.online {
+  background-color: #4caf50;
+  animation: fadeOut 3s forwards;
+}
+
+.connection-status.offline {
+  background-color: #f44336;
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
