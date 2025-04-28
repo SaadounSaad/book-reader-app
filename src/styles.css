@@ -1,0 +1,252 @@
+/* styles.css */
+:root {
+  --primary-color: #4a6fa5;
+  --secondary-color: #166088;
+  --light-bg: #f8f9fa;
+  --dark-bg: #333;
+  --text-light: #333;
+  --text-dark: #f8f9fa;
+  --border-color: #ddd;
+  --hover-color: #e6f2ff;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--light-bg);
+  color: var(--text-light);
+}
+
+.book-library {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--primary-color);
+}
+
+.upload-btn, .reset-btn {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-left: 10px;
+  border: none;
+}
+
+.upload-btn:hover, .reset-btn:hover {
+  background-color: var(--secondary-color);
+}
+
+.reset-btn {
+  background-color: #e74c3c;
+}
+
+.recent-books, .all-books {
+  margin-bottom: 40px;
+}
+
+h2 {
+  margin-bottom: 15px;
+  color: var(--secondary-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.book-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 20px;
+  padding-bottom: 15px;
+}
+
+.book-card {
+  min-width: 200px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  transition: transform 0.3s;
+}
+
+.book-card:hover {
+  transform: translateY(-5px);
+  cursor: pointer;
+}
+
+.book-cover, .cover-placeholder {
+  background-color: var(--secondary-color);
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.book-info h3 {
+  margin: 5px 0;
+  font-size: 1rem;
+}
+
+.book-info p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.progress-bar {
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  margin: 8px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary-color);
+  border-radius: 3px;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+.book-item {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  transition: transform 0.3s;
+}
+
+.book-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+
+.book-item h3 {
+  margin: 10px 0 5px;
+  font-size: 1rem;
+}
+
+.book-item p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.added-date {
+  font-size: 0.8rem !important;
+  color: #999 !important;
+}
+
+.empty-library {
+  text-align: center;
+  padding: 40px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.settings-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-top: 30px;
+}
+
+.setting-option {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.setting-option label {
+  width: 120px;
+  margin-right: 15px;
+}
+
+.setting-option input[type="range"] {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.setting-option select {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+/* Styles pour un thème sombre */
+body.dark-theme {
+  background-color: var(--dark-bg);
+  color: var(--text-dark);
+}
+
+body.dark-theme .book-item,
+body.dark-theme .book-card,
+body.dark-theme .settings-panel,
+body.dark-theme .empty-library {
+  background-color: #444;
+  color: var(--text-dark);
+}
+
+body.dark-theme h2 {
+  color: #a9cae8;
+}
+
+body.dark-theme .book-info p,
+body.dark-theme .book-item p {
+  color: #bbb;
+}
+
+body.dark-theme .progress-bar {
+  background-color: #555;
+}
+
+/* Styles pour thème sépia */
+body.sepia-theme {
+  background-color: #f4ecd8;
+  color: #5f4b32;
+}
+
+body.sepia-theme .book-item,
+body.sepia-theme .book-card,
+body.sepia-theme .settings-panel,
+body.sepia-theme .empty-library {
+  background-color: #fbf7e8;
+}
+
+body.sepia-theme h2 {
+  color: #8e6f47;
+}
+
+body.sepia-theme .book-info p,
+body.sepia-theme .book-item p {
+  color: #7a6853;
+}

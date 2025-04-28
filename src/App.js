@@ -1,19 +1,6 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthChange, getCurrentUser } from './services/authService';
-import { 
-  getUserBooks, 
-  getReadingHistory,
-  updateReadingProgress,
-  addBookmark as addFirebaseBookmark,
-  removeBookmark as removeFirebaseBookmark,
-  addAnnotation as addFirebaseAnnotation,
-  removeAnnotation as removeFirebaseAnnotation
-} from './services/bookService';
-import ConnectionStatus from './components/ConnectionStatus';
-import Login from './components/Login';
-import Register from './components/Register';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Library from './components/Library';
 import Reader from './components/Reader';
 import StatsPage from './components/StatsPage';
@@ -21,8 +8,6 @@ import SettingsPage from './components/SettingsPage';
 import './App.css';
 
 const App = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [books, setBooks] = useState([]);
   const [readingHistory, setReadingHistory] = useState([]);
   const [appSettings, setAppSettings] = useState({
@@ -37,130 +22,126 @@ const App = () => {
     nightModeStartTime: '20:00',
     nightModeEndTime: '07:00',
   });
-
-  // Observer l'état de l'authentification
+  // Dans App.js, ajoutez :
+  const addBook = (newBook) => {
+    setBooks(prevBooks => [...prevBooks, newBook]);
+  };
+  // Charger les livres depuis le stockage local au démarrage
   useEffect(() => {
-    const unsubscribe = onAuthChange((user) => {
-      setUser(user);
-      if (!user) {
-        // Si déconnecté, on peut charger les données locales
-        loadLocalData();
+    const loadLocalData = () => {
+      // Charger les livres
+      const savedBooks = localStorage.getItem('books');
+      if (savedBooks) {
+        setBooks(JSON.parse(savedBooks));
+      } else {
+        // Livres d'exemple si aucun n'est trouvé
+        const exampleBooks = [
+          {
+            id: 1,
+            title: "Les Misérables",
+            author: "Victor Hugo",
+            cover: "/covers/les-miserables.jpg",
+            totalPages: 1500,
+            currentPage: 245,
+            lastModified: new Date().toISOString(),
+            chapters: [
+              { id: 1, title: "Chapitre 1", startPage: 1 },
+              { id: 2, title: "Chapitre 2", startPage: 35 },
+              { id: 3, title: "Chapitre 3", startPage: 78 },
+              // ...autres chapitres
+            ],
+            bookmarks: [15, 67, 198],
+            annotations: [
+              { page: 25, text: "Passage important", highlight: "Jean Valjean regarda..." },
+              { page: 67, text: "Contexte historique", highlight: "La révolution française..." },
+              // ...autres annotations
+            ]
+          },
+          // ...autres livres
+        ];
+        setBooks(exampleBooks);
+        localStorage.setItem('books', JSON.stringify(exampleBooks));
+        localStorage.setItem('booksLastModified', new Date().toISOString());
       }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Charger les données depuis Firebase quand l'utilisateur est connecté
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (user) {
-        try {
-          setLoading(true);
-          
-          // Charger les livres depuis Firebase
-          const userBooks = await getUserBooks(user.uid);
-          if (userBooks.length > 0) {
-            setBooks(userBooks);
-          } else {
-            // Si aucun livre sur Firebase, utiliser les livres locaux
-            const localBooks = JSON.parse(localStorage.getItem('books') || '[]');
-            setBooks(localBooks);
-            
-            // Optionnel : synchroniser les livres locaux vers Firebase
-            // Cette étape peut être omise si vous préférez ne pas importer automatiquement
-            // TODO: ajouter code pour synchroniser vers Firebase
+      
+      // Charger l'historique de lecture
+      const savedHistory = localStorage.getItem('readingHistory');
+      if (savedHistory) {
+        setReadingHistory(JSON.parse(savedHistory));
+      } else {
+        // Exemple d'historique de lecture
+        const exampleHistory = [
+          {
+            id: 1,
+            bookId: 1,
+            date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), // il y a 6 jours
+            duration: 45, // minutes
+            pagesRead: 20,
+            chapterId: 0
+          },
+          {
+            id: 2,
+            bookId: 1,
+            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // il y a 5 jours
+            duration: 60,
+            pagesRead: 30,
+            chapterId: 0
+          },
+          {
+            id: 3,
+            bookId: 1,
+            date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // il y a 3 jours
+            duration: 75,
+            pagesRead: 40,
+            chapterId: 1
+          },
+          {
+            id: 4,
+            bookId: 1,
+            date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // il y a 2 jours
+            duration: 50,
+            pagesRead: 25,
+            chapterId: 1
+          },
+          {
+            id: 5,
+            bookId: 1,
+            date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // hier
+            duration: 90,
+            pagesRead: 55,
+            chapterId: 2
+          },
+          {
+            id: 6,
+            bookId: 1,
+            date: new Date().toISOString(), // aujourd'hui
+            duration: 35,
+            pagesRead: 20,
+            chapterId: 2
           }
-          
-          // Charger l'historique depuis Firebase (à implémenter)
-          // const userHistory = await getReadingHistory(user.uid);
-          // setReadingHistory(userHistory);
-          
-          // Charger les paramètres (à implémenter)
-          // TODO: ajouter chargement des paramètres depuis Firebase
-          
-          setLoading(false);
-        } catch (error) {
-          console.error("Erreur lors du chargement des données Firebase:", error);
-          // En cas d'erreur, utiliser les données locales
-          loadLocalData();
-          setLoading(false);
-        }
+        ];
+        setReadingHistory(exampleHistory);
+        localStorage.setItem('readingHistory', JSON.stringify(exampleHistory));
+        localStorage.setItem('historyLastModified', new Date().toISOString());
+      }
+      
+      // Charger les paramètres de l'application
+      const savedAppSettings = localStorage.getItem('appSettings');
+      if (savedAppSettings) {
+        setAppSettings(JSON.parse(savedAppSettings));
+      }
+      
+      // Charger les paramètres de thème
+      const savedThemeSettings = localStorage.getItem('themeSettings');
+      if (savedThemeSettings) {
+        setThemeSettings(JSON.parse(savedThemeSettings));
       }
     };
     
-    loadUserData();
-  }, [user]);
-
-  // Fonction pour charger les données depuis localStorage
-  const loadLocalData = () => {
-    // Charger les livres
-    const savedBooks = localStorage.getItem('books');
-    if (savedBooks) {
-      setBooks(JSON.parse(savedBooks));
-    } else {
-      // Livres d'exemple si aucun n'est trouvé
-      const exampleBooks = [
-        {
-          id: 1,
-          title: "Les Misérables",
-          author: "Victor Hugo",
-          cover: "/covers/les-miserables.jpg",
-          totalPages: 1500,
-          currentPage: 245,
-          lastModified: new Date().toISOString(),
-          chapters: [
-            { id: 1, title: "Chapitre 1", startPage: 1 },
-            { id: 2, title: "Chapitre 2", startPage: 35 },
-            { id: 3, title: "Chapitre 3", startPage: 78 },
-          ],
-          bookmarks: [15, 67, 198],
-          annotations: [
-            { page: 25, text: "Passage important", highlight: "Jean Valjean regarda..." },
-            { page: 67, text: "Contexte historique", highlight: "La révolution française..." },
-          ]
-        },
-      ];
-      setBooks(exampleBooks);
-      localStorage.setItem('books', JSON.stringify(exampleBooks));
-      localStorage.setItem('booksLastModified', new Date().toISOString());
-    }
-    
-    // Charger l'historique de lecture
-    const savedHistory = localStorage.getItem('readingHistory');
-    if (savedHistory) {
-      setReadingHistory(JSON.parse(savedHistory));
-    } else {
-      // Exemple d'historique de lecture
-      const exampleHistory = [
-        {
-          id: 1,
-          bookId: 1,
-          date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-          duration: 45,
-          pagesRead: 20,
-          chapterId: 0
-        },
-        // ...autres entrées
-      ];
-      setReadingHistory(exampleHistory);
-      localStorage.setItem('readingHistory', JSON.stringify(exampleHistory));
-    }
-    
-    // Charger les paramètres
-    const savedAppSettings = localStorage.getItem('appSettings');
-    if (savedAppSettings) {
-      setAppSettings(JSON.parse(savedAppSettings));
-    }
-    
-    const savedThemeSettings = localStorage.getItem('themeSettings');
-    if (savedThemeSettings) {
-      setThemeSettings(JSON.parse(savedThemeSettings));
-    }
-  };
+    loadLocalData();
+  }, []);
   
-  // Sauvegarder les données dans localStorage (comme backup)
+  // Sauvegarder les livres lorsqu'ils sont modifiés
   useEffect(() => {
     if (books.length > 0) {
       localStorage.setItem('books', JSON.stringify(books));
@@ -168,6 +149,7 @@ const App = () => {
     }
   }, [books]);
   
+  // Sauvegarder l'historique de lecture lorsqu'il est modifié
   useEffect(() => {
     if (readingHistory.length > 0) {
       localStorage.setItem('readingHistory', JSON.stringify(readingHistory));
@@ -175,40 +157,15 @@ const App = () => {
     }
   }, [readingHistory]);
   
+  // Sauvegarder les paramètres de l'application lorsqu'ils sont modifiés
   useEffect(() => {
     localStorage.setItem('appSettings', JSON.stringify(appSettings));
   }, [appSettings]);
   
+  // Sauvegarder les paramètres de thème lorsqu'ils sont modifiés
   useEffect(() => {
     localStorage.setItem('themeSettings', JSON.stringify(themeSettings));
   }, [themeSettings]);
-  
-  // Fonction pour ajouter un livre
-  const addBook = async (newBook) => {
-    // Générer un ID unique pour le livre
-    const bookWithId = {
-      ...newBook,
-      id: Date.now(),
-      lastModified: new Date().toISOString()
-    };
-    
-    // Mise à jour de l'état local
-    setBooks(prevBooks => [...prevBooks, bookWithId]);
-    
-    // Si l'utilisateur est connecté, sauvegarder dans Firebase
-    if (user) {
-      try {
-        // Utiliser le service pour ajouter le livre dans Firebase
-        // Cette fonction retournera l'ID généré par Firebase que nous pourrons utiliser
-        // Mais pour l'instant, nous utilisons l'ID local
-        const firebaseBookId = await addBook(user.uid, bookWithId);
-        // Si besoin, mettre à jour l'ID local avec celui de Firebase
-      } catch (error) {
-        console.error("Erreur lors de l'ajout du livre dans Firebase:", error);
-        // L'ajout local a déjà été fait, donc pas besoin de revenir en arrière
-      }
-    }
-  };
   
   // Générer un nouvel ID pour les sessions de lecture
   const generateSessionId = () => {
@@ -217,7 +174,7 @@ const App = () => {
   };
   
   // Fonction pour enregistrer une session de lecture
-  const recordReadingSession = async (bookId, duration, pagesRead, chapterId) => {
+  const recordReadingSession = (bookId, duration, pagesRead, chapterId) => {
     const newSession = {
       id: generateSessionId(),
       bookId,
@@ -227,27 +184,15 @@ const App = () => {
       chapterId
     };
     
-    // Mise à jour de l'état local
     setReadingHistory(prevHistory => [...prevHistory, newSession]);
-    
-    // Si l'utilisateur est connecté, sauvegarder dans Firebase
-    if (user) {
-      try {
-        // TODO: Implémenter la fonction pour ajouter la session dans Firebase
-        // await addReadingSession(user.uid, bookId, newSession);
-      } catch (error) {
-        console.error("Erreur lors de l'ajout de la session dans Firebase:", error);
-      }
-    }
   };
   
   // Fonction pour mettre à jour la progression d'un livre
-  const updateBookProgress = async (bookId, currentPage, chapterId, updatedBook = null) => {
-    // Mise à jour de l'état local
+  const updateBookProgress = (bookId, currentPage, chapterId) => {
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
-          ? updatedBook || { 
+          ? { 
               ...book, 
               currentPage, 
               lastReadChapter: chapterId,
@@ -256,89 +201,44 @@ const App = () => {
           : book
       )
     );
-    
-    // Si l'utilisateur est connecté, sauvegarder dans Firebase
-    if (user) {
-      try {
-        // Mise à jour de la progression dans Firebase
-        await updateReadingProgress(user.uid, bookId, {
-          currentChapter: chapterId,
-          currentPage,
-          lastModified: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error("Erreur lors de la mise à jour de la progression dans Firebase:", error);
-      }
-    }
   };
   
   // Fonction pour ajouter un signet
-  const addBookmark = async (bookId, bookmarkData) => {
-    // Pour compatibilité avec l'ancien système
-    const isLegacyBookmark = typeof bookmarkData === 'number';
-    
-    // Mise à jour de l'état local
+  const addBookmark = (bookId, pageNumber) => {
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
           ? { 
               ...book, 
               bookmarks: book.bookmarks 
-                ? isLegacyBookmark
-                  ? [...new Set([...book.bookmarks, bookmarkData])]
-                  : [...book.bookmarks, bookmarkData]
-                : [bookmarkData],
+                ? [...new Set([...book.bookmarks, pageNumber])] 
+                : [pageNumber],
               lastModified: new Date().toISOString()
             } 
           : book
       )
     );
-    
-    // Si l'utilisateur est connecté, sauvegarder dans Firebase
-    if (user) {
-      try {
-        // Utiliser le service Firebase pour ajouter le signet
-        await addFirebaseBookmark(user.uid, bookId, isLegacyBookmark
-          ? { pageNumber: bookmarkData, date: new Date().toISOString() }
-          : bookmarkData
-        );
-      } catch (error) {
-        console.error("Erreur lors de l'ajout du signet dans Firebase:", error);
-      }
-    }
   };
   
   // Fonction pour supprimer un signet
-  const removeBookmark = async (bookId, bookmarkId) => {
-    // Mise à jour de l'état local
+  const removeBookmark = (bookId, pageNumber) => {
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
           ? { 
               ...book, 
               bookmarks: book.bookmarks 
-                ? typeof bookmarkId === 'number'
-                  ? book.bookmarks.filter(bookmark => bookmark !== bookmarkId) // Ancien système
-                  : book.bookmarks.filter((_, index) => index !== bookmarkId) // Nouveau système
+                ? book.bookmarks.filter(bookmark => bookmark !== pageNumber) 
                 : [],
               lastModified: new Date().toISOString()
             } 
           : book
       )
     );
-    
-    // Si l'utilisateur est connecté, supprimer dans Firebase
-    if (user) {
-      try {
-        await removeFirebaseBookmark(user.uid, bookId, bookmarkId);
-      } catch (error) {
-        console.error("Erreur lors de la suppression du signet dans Firebase:", error);
-      }
-    }
   };
   
   // Fonction pour ajouter une annotation
-  const addAnnotation = async (bookId, pageNumber, highlightedText, noteText) => {
+  const addAnnotation = (bookId, pageNumber, highlightedText, noteText) => {
     const newAnnotation = {
       page: pageNumber,
       highlight: highlightedText,
@@ -346,7 +246,6 @@ const App = () => {
       date: new Date().toISOString()
     };
     
-    // Mise à jour de l'état local
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
@@ -360,20 +259,10 @@ const App = () => {
           : book
       )
     );
-    
-    // Si l'utilisateur est connecté, sauvegarder dans Firebase
-    if (user) {
-      try {
-        await addFirebaseAnnotation(user.uid, bookId, newAnnotation);
-      } catch (error) {
-        console.error("Erreur lors de l'ajout de l'annotation dans Firebase:", error);
-      }
-    }
   };
   
   // Fonction pour supprimer une annotation
-  const removeAnnotation = async (bookId, annotationIndex) => {
-    // Mise à jour de l'état local
+  const removeAnnotation = (bookId, annotationIndex) => {
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
@@ -387,71 +276,48 @@ const App = () => {
           : book
       )
     );
-    
-    // Si l'utilisateur est connecté, supprimer dans Firebase
-    if (user) {
-      try {
-        await removeFirebaseAnnotation(user.uid, bookId, annotationIndex);
-      } catch (error) {
-        console.error("Erreur lors de la suppression de l'annotation dans Firebase:", error);
-      }
-    }
   };
   
-  // Autres fonctions existantes
+  // Fonction pour mettre à jour les paramètres de l'application
   const updateAppSettings = (newSettings) => {
     setAppSettings(newSettings);
-    // TODO: Synchroniser avec Firebase
   };
   
+  // Fonction pour mettre à jour les paramètres de thème
   const updateThemeSettings = (newSettings) => {
     setThemeSettings(newSettings);
-    // TODO: Synchroniser avec Firebase
   };
   
+  // Fonction pour mettre à jour les livres (utilisée pour la synchronisation)
   const updateBooks = (newBooks) => {
     setBooks(newBooks);
-    // TODO: Synchroniser avec Firebase
   };
   
+  // Fonction pour mettre à jour l'historique de lecture (utilisée pour la synchronisation)
   const updateReadingHistory = (newHistory) => {
     setReadingHistory(newHistory);
-    // TODO: Synchroniser avec Firebase
   };
-  
-  if (loading) {
-    return <div className="loading-screen">Chargement...</div>;
-  }
   
   return (
     <Router>
       <div className="app-container">
-        <ConnectionStatus />
         <Routes>
           <Route 
-            path="/login" 
-            element={user ? <Navigate to="/" /> : <Login />} 
-          />
-          <Route 
-            path="/register" 
-            element={user ? <Navigate to="/" /> : <Register />} 
-          />
-          <Route 
-            path="/" 
-            element={
-              <Library 
-                books={books} 
-                addBook={addBook}
-                user={user} 
-              />
-            }  
-          />
+              path="/" 
+              element={
+                <Library 
+                  books={books} 
+                  addBook={addBook} 
+                  setBooks={setBooks} // ✅ on l’ajoute ici
+                />
+              }
+            />
+
           <Route 
             path="/reader/:bookId" 
             element={
               <Reader 
                 books={books}
-                user={user}
                 updateBookProgress={updateBookProgress}
                 recordReadingSession={recordReadingSession}
                 addBookmark={addBookmark}
@@ -469,7 +335,6 @@ const App = () => {
               <StatsPage 
                 books={books}
                 readingHistory={readingHistory}
-                user={user}
               />
             } 
           />
@@ -485,7 +350,6 @@ const App = () => {
                 updateAppSettings={updateAppSettings}
                 themeSettings={themeSettings}
                 updateThemeSettings={updateThemeSettings}
-                user={user}
               />
             } 
           />

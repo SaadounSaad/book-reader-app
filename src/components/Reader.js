@@ -1,5 +1,4 @@
 // Reader.js
-// Reader.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ChapterMenu from './ChapterMenu';
@@ -10,195 +9,112 @@ import SearchPanel from './SearchPanel';
 import AnnotationsList from './AnnotationsList';
 import './Reader.css';
 import { v4 as uuidv4 } from 'uuid';
-import { getDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { getBookChapters, getReadingProgress, updateReadingProgress } from '../services/bookService';
-import { debounce } from 'lodash'; // ✅ Débounce ajouté
 
-const Reader = ({
-  books,
-  user,
-  updateBookProgress,
-  recordReadingSession,
-  addBookmark,
+const Reader = ({ 
+  books, 
+  updateBookProgress, 
+  recordReadingSession, 
+  addBookmark, 
   removeBookmark,
   addAnnotation,
-  removeAnnotation,
-  appSettings,
-  themeSettings
+  removeAnnotation 
 }) => {
   const { bookId } = useParams();
   const [book, setBook] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentChapter, setCurrentChapter] = useState(0);
-  const [chapters, setChapters] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [annotationOpen, setAnnotationOpen] = useState(false);
-  const [theme, setTheme] = useState(themeSettings?.defaultTheme || 'light');
+  const [theme, setTheme] = useState('light');
   const [fontSize, setFontSize] = useState(16);
   const [swipeStart, setSwipeStart] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [bookContent, setBookContent] = useState({});
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
   const [chapterScrollPositions, setChapterScrollPositions] = useState({});
-  const [loading, setLoading] = useState(true);
   const readerRef = useRef(null);
   const contentRef = useRef(null);
 
+  // Enregistrement de la session
   const [sessionStartTime, setSessionStartTime] = useState(Date.now());
   const [sessionPagesRead, setSessionPagesRead] = useState(0);
   const [lastRecordedPage, setLastRecordedPage] = useState(0);
-
+  
+  // Fonction pour sauvegarder la position de défilement
   const saveScrollPosition = () => {
     if (contentRef.current && book) {
-      const currentPos = contentRef.current.scrollTop;
       setChapterScrollPositions(prev => ({
         ...prev,
-        [currentChapter]: currentPos
+        [currentChapter]: contentRef.current.scrollTop
       }));
-
-      if (user) {
-        updateReadingProgress(user.uid, book.id, {
-          currentChapter,
-          currentPage,
-          scrollPositions: {
-            ...chapterScrollPositions,
-            [currentChapter]: currentPos
-          }
-        }).catch(error => {
-          console.error("Erreur lors de la sauvegarde de la position:", error);
-        });
-      }
     }
   };
-
-  // ✅ Debounce la fonction de sauvegarde
-  const debouncedSaveScrollPosition = useRef(debounce(saveScrollPosition, 500)).current;
-
+  
+  // Trouver le livre correspondant à l'ID
   useEffect(() => {
-    return () => {
-      debouncedSaveScrollPosition.cancel(); // ✅ Nettoyage
-    };
-  }, [debouncedSaveScrollPosition]);
-
-  useEffect(() => {
-    const loadBookData = async () => {
-      setLoading(true);
-      try {
-        let foundBook;
-        let bookChapters;
-        let progress;
-
-        if (user && bookId) {
-          try {
-            const bookDoc = await getDoc(doc(db, "books", bookId));
-            if (bookDoc.exists()) {
-              foundBook = { id: bookDoc.id, ...bookDoc.data() };
-              bookChapters = await getBookChapters(bookId);
-              progress = await getReadingProgress(user.uid, bookId);
-
-              if (foundBook && bookChapters && bookChapters.length > 0) {
-                setBook(foundBook);
-                setChapters(bookChapters);
-
-                if (progress) {
-                  setCurrentPage(progress.currentPage || 1);
-                  setCurrentChapter(progress.currentChapter || 0);
-                  if (progress.scrollPositions) {
-                    setChapterScrollPositions(progress.scrollPositions);
-                  }
-                } else {
-                  setCurrentPage(foundBook.currentPage || 1);
-                  setCurrentChapter(0);
-                }
-
-                setLastRecordedPage(currentPage);
-                setLoading(false);
-                return;
-              }
-            }
-          } catch (error) {
-            console.error("Erreur lors du chargement depuis Firebase:", error);
-          }
+    if (!bookId || !books || books.length === 0) return;
+  
+    const foundBook = books.find(b => b.id?.toString() === bookId.toString());
+  
+    if (foundBook && Array.isArray(foundBook.chapters)) {
+      setBook(foundBook);
+      setCurrentPage(foundBook.currentPage || 1);
+  
+      const chapter = foundBook.chapters.findIndex((ch, index, arr) => {
+        const nextChapter = arr[index + 1];
+        const pageToUse = foundBook.currentPage || 1;
+        const startPage = ch.startPage || ch.pageNumber;
+  
+        return startPage <= pageToUse &&
+          (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageToUse);
+      });
+  
+      setCurrentChapter(chapter !== -1 ? chapter : 0);
+      setLastRecordedPage(foundBook.currentPage || 1);
+  
+      // Création du contenu
+      const content = {};
+      foundBook.chapters.forEach((chapter, index) => {
+        const startPage = chapter.startPage || chapter.pageNumber;
+        const endPage = index < foundBook.chapters.length - 1
+          ? (foundBook.chapters[index + 1].startPage || foundBook.chapters[index + 1].pageNumber) - 1
+          : foundBook.totalPages;
+  
+        for (let i = startPage; i <= endPage; i++) {
+          content[i] = chapter.content || `Page ${i}`;
         }
-
-        if (books && bookId) {
-          foundBook = books.find(b => b.id.toString() === bookId.toString());
-          if (foundBook) {
-            setBook(foundBook);
-            setCurrentPage(foundBook.currentPage || 1);
-
-            const chapter = foundBook.chapters.findIndex(
-              (ch, index, arr) => {
-                const nextChapter = arr[index + 1];
-                const pageToUse = foundBook.currentPage || 1;
-                const startPage = ch.startPage || ch.pageNumber;
-                return startPage <= pageToUse &&
-                  (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageToUse);
-              }
-            );
-
-            setCurrentChapter(chapter !== -1 ? chapter : 0);
-            setLastRecordedPage(foundBook.currentPage || 1);
-
-            const content = {};
-            foundBook.chapters.forEach((chapter, index) => {
-              const startPage = chapter.startPage || chapter.pageNumber;
-              const endPage = index < foundBook.chapters.length - 1
-                ? (foundBook.chapters[index + 1].startPage || foundBook.chapters[index + 1].pageNumber) - 1
-                : foundBook.totalPages;
-
-              for (let i = startPage; i <= endPage; i++) {
-                content[i] = chapter.content || `Contenu de la page ${i}. ورد يوم الجمعة`;
-              }
-            });
-
-            setBookContent(content);
-          }
-        }
-      } catch (error) {
-        console.error("Erreur lors du chargement du livre:", error);
-      } finally {
-        setLoading(false);
-      }
-
-      setSessionStartTime(Date.now());
-      setSessionPagesRead(0);
-    };
-
-    loadBookData();
-  }, [books, bookId, user]);
+      });
+  
+      setBookContent(content);
+    } else {
+      console.warn("❗️ Le livre trouvé n’a pas de structure de chapitres valide. Vérifiez l'import.");
+      setBook(null); // ou rediriger vers la bibliothèque
+    }
+  
+    setSessionStartTime(Date.now());
+    setSessionPagesRead(0);
+  }, [books, bookId]);
+  
   
   // Restaurer la position de défilement lors du changement de chapitre
   useEffect(() => {
-    if (contentRef.current && book && !loading) {
+    if (contentRef.current && book) {
       // Si nous avons une position sauvegardée pour ce chapitre, l'utiliser
       if (chapterScrollPositions[currentChapter]) {
-        setTimeout(() => {
-          if (contentRef.current) {
-            contentRef.current.scrollTop = chapterScrollPositions[currentChapter];
-          }
-        }, 100);
+        contentRef.current.scrollTop = chapterScrollPositions[currentChapter];
       } else {
         // Sinon, aller au début du chapitre
         contentRef.current.scrollTop = 0;
       }
     }
-  }, [currentChapter, book, chapterScrollPositions, loading]);
+  }, [currentChapter, book, chapterScrollPositions]);
   
   // Sauvegardez la position avant de quitter
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      saveScrollPosition();
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       saveScrollPosition();
     };
   }, []);
@@ -256,7 +172,7 @@ const Reader = ({
     }
   }, [book, currentPage, lastRecordedPage, currentChapter, updateBookProgress]);
   
-  // Reste du code inchangé...
+  // Gestionnaires de navigation par chapitre
   const goToNextChapter = () => {
     if (book && currentChapter < book.chapters.length - 1) {
       goToChapter(currentChapter + 1);
@@ -294,16 +210,16 @@ const Reader = ({
       setCurrentPage(pageNumber);
       
       // Mettre à jour le chapitre actuel
-      const chapter = book.chapters.findIndex(
-        (ch, index, arr) => {
-          const nextChapter = arr[index + 1];
-          const startPage = ch.startPage || ch.pageNumber;
-          
-          return startPage <= pageNumber && 
-                (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageNumber);
-        }
-      );
-      
+      const chapter = Array.isArray(book.chapters)
+  ? book.chapters.findIndex((ch, index, arr) => {
+      const nextChapter = arr[index + 1];
+      const startPage = ch.startPage || ch.pageNumber;
+
+      return startPage <= pageNumber &&
+        (!nextChapter || (nextChapter.startPage || nextChapter.pageNumber) > pageNumber);
+    })
+  : -1;
+     
       if (chapter !== -1) {
         setCurrentChapter(chapter);
       }
@@ -488,12 +404,8 @@ const Reader = ({
     };
   }, [currentPage, book]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  if (loading) {
-    return <div className="reader-loading">Chargement...</div>;
-  }
-  
   if (!book) {
-    return <div className="reader-loading">Livre non trouvé</div>;
+    return <div className="reader-loading">Chargement...</div>;
   }
   
   // Obtenir le contenu de la page actuelle
@@ -513,10 +425,7 @@ const Reader = ({
 
     return currentChapterContent;
   };
-   // ❗️Modifie ici l'onScroll
-   const handleScroll = () => {
-    debouncedSaveScrollPosition();
-  };
+  
   // Fonction de rendu du contenu du livre
   const renderBookContent = () => {
     if (!book) return <p>Chargement...</p>;
@@ -549,7 +458,6 @@ const Reader = ({
   
   const currentBookmark = isCurrentPositionBookmarked();
   
-  // Le reste du JSX reste pratiquement inchangé...
   return (
     <div 
       className={`reader-container theme-${theme}`} 
@@ -633,7 +541,7 @@ const Reader = ({
             </button>
           </div>
           <div className="chapters-list">
-            {book.chapters.map((chapter, index) => (
+            {(Array.isArray(book.chapters) ? book.chapters : []).map((chapter, index) => (
               <div 
                 key={index} 
                 className={`chapter-item ${index === currentChapter ? 'active' : ''}`}
@@ -652,9 +560,12 @@ const Reader = ({
           onMouseUp={handleTextSelection}
           onTouchEnd={handleTextSelection}
           ref={contentRef}
-          onScroll={debouncedSaveScrollPosition} // ✅ Utilisation de la fonction debounce
+          onScroll={() => {
+            // Optionnel: sauvegarder la position pendant le défilement
+            // Pour des performances optimales, utiliser un débounce
+            saveScrollPosition();
+          }}
         >
-
           <div className="page-content">
             {renderBookContent()}
           </div>
